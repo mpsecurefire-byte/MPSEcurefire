@@ -22,19 +22,29 @@ app.post('/buscar-prospectos', async (req, res) => {
     const apiKey = process.env.PDL_API_KEY;
 
     const [min, max] = (organization_num_employees_ranges?.[0] || '11,200').split(',');
+    const country = person_locations?.[0]?.toLowerCase() === 'mexico' ? 'mexico' : 'united states';
+    const titles = (person_titles || ['CEO']).slice(0, 5);
 
-    const params = new URLSearchParams({
-      api_key: apiKey,
-      pretty: true,
-      size: per_page || 10,
-      titleRole: person_titles?.slice(0, 3).join(';') || 'CEO',
-      country: person_locations?.[0] === 'Mexico' ? 'mexico' : 'united states',
-      minEmployeeCount: min || '11',
-      maxEmployeeCount: max || '200'
-    });
+    const titleConditions = titles.map(t => `job_title ~ "${t}"`).join(' OR ');
+    const query = `(${titleConditions}) AND location_country = "${country}" AND job_company_size >= "${min}" AND job_company_size <= "${max}"`;
 
-    const response = await fetch(`https://api.peopledatalabs.com/v5/person/search?${params}`, {
-      headers: { 'X-Api-Key': apiKey }
+    console.log('PDL query:', query);
+
+    const response = await fetch('https://api.peopledatalabs.com/v5/person/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': apiKey
+      },
+      body: JSON.stringify({
+        query: { bool: { must: [
+          { terms: { job_title: titles.map(t => t.toLowerCase()) } },
+          { term: { location_country: country } },
+          { range: { job_company_size: { gte: parseInt(min), lte: parseInt(max) } } }
+        ]}},
+        size: per_page || 10,
+        pretty: true
+      })
     });
 
     const data = await response.json();
