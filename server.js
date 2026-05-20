@@ -1,10 +1,16 @@
 const express = require('express');
-const cors = require('cors');
 const fetch = require('node-fetch');
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Proxy Apollo activo' });
@@ -14,6 +20,8 @@ app.post('/buscar-prospectos', async (req, res) => {
   try {
     const { api_key, ...filtros } = req.body;
     const keyToUse = process.env.APOLLO_API_KEY || api_key;
+
+    console.log('Buscando con filtros:', JSON.stringify(filtros));
 
     const response = await fetch('https://api.apollo.io/v1/mixed_people/search', {
       method: 'POST',
@@ -26,8 +34,10 @@ app.post('/buscar-prospectos', async (req, res) => {
     });
 
     const data = await response.json();
+    console.log('Respuesta Apollo status:', response.status);
     res.json(data);
   } catch (e) {
+    console.error('Error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
