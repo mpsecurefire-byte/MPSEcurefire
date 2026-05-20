@@ -53,16 +53,20 @@ app.post('/buscar-prospectos', async (req, res) => {
     if (!response.ok) throw new Error(data.error?.message || `Error ${response.status}`);
 
     const people = (data.data || []).map(p => ({
-      first_name: p.first_name,
-      last_name: p.last_name,
-      title: p.job_title,
-      email: p.work_email || p.emails?.[0]?.address,
-      phone_numbers: p.phone_numbers?.map(n => ({ raw_number: n })),
-      linkedin_url: p.linkedin_url,
-      city: p.location_locality,
-      country: p.location_country,
-      organization: { name: p.job_company_name }
-    }));
+  	first_name: p.first_name,
+  	last_name: p.last_name,
+  	title: p.job_title,
+  	email: p.work_email || p.emails?.[0]?.address,
+  	phone_numbers: typeof p.phone_numbers === 'string' 
+    		? [{ raw_number: p.phone_numbers }] 
+    		: Array.isArray(p.phone_numbers) 
+      			? p.phone_numbers.map(n => ({ raw_number: typeof n === 'string' ? n : n.number || n }))
+   		        : [],
+  	linkedin_url: p.linkedin_url,
+  	city: p.location_locality,
+  	country: p.location_country,
+  	organization: { name: p.job_company_name }
+     }));
 
     res.json({ people });
   } catch (e) {
