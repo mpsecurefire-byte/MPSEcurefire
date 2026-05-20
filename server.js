@@ -13,31 +13,50 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Proxy Apollo activo' });
+  res.json({ status: 'ok', message: 'Proxy PDL activo' });
 });
 
 app.post('/buscar-prospectos', async (req, res) => {
   try {
-    const { api_key, ...filtros } = req.body;
-    const keyToUse = process.env.APOLLO_API_KEY || api_key;
+    const { person_titles, person_locations, organization_num_employees_ranges, per_page } = req.body;
+    const apiKey = process.env.PDL_API_KEY;
 
-    console.log('Buscando con filtros:', JSON.stringify(filtros));
+    const [min, max] = (organization_num_employees_ranges?.[0] || '11,200').split(',');
 
-    const response = await fetch('https://api.apollo.io/v1/mixed_people/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-Api-Key': keyToUse
-      },
-      body: JSON.stringify(filtros)
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      pretty: true,
+      size: per_page || 10,
+      titleRole: person_titles?.slice(0, 3).join(';') || 'CEO',
+      country: person_locations?.[0] === 'Mexico' ? 'mexico' : 'united states',
+      minEmployeeCount: min || '11',
+      maxEmployeeCount: max || '200'
+    });
+
+    const response = await fetch(`https://api.peopledatalabs.com/v5/person/search?${params}`, {
+      headers: { 'X-Api-Key': apiKey }
     });
 
     const data = await response.json();
-    console.log('Respuesta Apollo status:', response.status);
-    res.json(data);
+    console.log('PDL status:', response.status, 'total:', data.total);
+
+    if (!response.ok) throw new Error(data.error?.message || `Error ${response.status}`);
+
+    const people = (data.data || []).map(p => ({
+      first_name: p.first_name,
+      last_name: p.last_name,
+      title: p.job_title,
+      email: p.work_email || p.emails?.[0]?.address,
+      phone_numbers: p.phone_numbers?.map(n => ({ raw_number: n })),
+      linkedin_url: p.linkedin_url,
+      city: p.location_locality,
+      country: p.location_country,
+      organization: { name: p.job_company_name }
+    }));
+
+    res.json({ people });
   } catch (e) {
-    console.error('Error:', e.message);
+    console.error('Error PDL:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
